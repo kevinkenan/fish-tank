@@ -95,7 +95,7 @@ function exec_command_path
 
 		# Get all the commands that could be called next.
 		set -l cmdp _(string join ':' $_cmdpath)
-		set nextcmds (functions -a | string match -r \^$cmdp'[:\$]{1}\w+')
+		set nextcmds (functions -a | string match -r \^$cmdp'[:\$]{1}[^_]\w+')
 		for f in  $nextcmds
 			# This is kinda ugly, but it appends '*' to commands that execute
 			# code as opposed to being just another part of the cmd path.
