@@ -101,64 +101,64 @@ function todo
 	# a line number or if (n-1) mod 4 = 1 it's a keyword (WORK, TODO, DONE,
 	# etc.), or if (n-1) mod 4 = 2 it's a a task description, or finally if
 	# (n-1) mod 4 = 3 it's a set of tags.
-	function _todo:_load_items
-		set -l opts 
-		set -a opts "F/file="
-		set -a opts "p/prefix="
-		argparse -n "_load_tasks" $opts -- $argv
-		or return
+# 	function _todo:_load_items
+# 		set -l opts 
+# 		set -a opts "F/file="
+# 		set -a opts "p/prefix="
+# 		argparse -n "_load_tasks" $opts -- $argv
+# 		or return
 
-		set -l filename (select "$_flag_F" "WORK.txt")
-		set -l prefix "[[:blank:]]*"(select "$_flag_p" "")"[[:blank:]]*"
-		set -l keywords "GOAL"
-		set -a keywords "DONE"
-		set -a keywords "WORK"
-		set -a keywords "TODO"
-		set -a keywords "NEXT"
-		set -l keywords (string join "|" $keywords)
+# 		set -l filename (select "$_flag_F" "WORK.txt")
+# 		set -l prefix "[[:blank:]]*"(select "$_flag_p" "")"[[:blank:]]*"
+# 		set -l keywords "GOAL"
+# 		set -a keywords "DONE"
+# 		set -a keywords "WORK"
+# 		set -a keywords "TODO"
+# 		set -a keywords "NEXT"
+# 		set -l keywords (string join "|" $keywords)
 
-		# Who doesn't love sed?
-		set -l sedcmd "/^$prefix($keywords)/{
-			=
-			h
-			s/^$prefix([[:alnum:]]+[#]{0,1}[[:alnum:]][:]{0,1}[[:alpha:]]*)[[:blank:]]*\[(.*)\][[:blank:]]*(.*)/\1"\\\n"\3"\\\n"\2/p
-			t
-			s/^$prefix([[:alnum:]]+[:]{0,1}[[:alpha:]]*)[[:blank:]]*\[(.*)\][[:blank:]]*(.*)/\1"\\\n"\3"\\\n"\2/p
-			t
-			s/^$prefix([[:alpha:]]+[#]{0,1}[[:alnum:]]*)[[:blank:]]*\[(.*)\][[:blank:]]*(.*)/\1"\\\n"\3"\\\n"\2/p
-			t
-			s/^$prefix([[:alpha:]]+[:]{0,1}[[:alpha:]]*)[[:blank:]]*(.*)/\1"\\\n"\2"\\\n"/p
-			}"
-		# set -l sedcmd "/^$prefix($keywords)/{
-		# 	=
-		# 	h
-		# 	s/^$prefix([[:alpha:]]+[:]{0,1}[[:alpha:]]*)[[:blank:]]*\[(.*)\][[:blank:]]*(.*)/\1"\\\n"\3"\\\n"\2/p
-		# 	t
-		# 	s/^$prefix([[:alpha:]]+[:]{0,1}[[:alpha:]]*)[[:blank:]]*(.*)/\1"\\\n"\2"\\\n"/p
-		# 	}"
-		set _allitems (sed -E -n -e "$sedcmd" $filename); or return
-# printf "%s\n" $_allitems
-		# Put each item in the appropriate list.
-		for i in (seq 1 4 (count $_allitems))
-			set -l item $_allitems[$i..(math $i + 3)]
+# 		# Who doesn't love sed?
+# 		set -l sedcmd "/^$prefix($keywords)/{
+# 			=
+# 			h
+# 			s/^$prefix([[:alnum:]]+#[[:alnum:]]+:[[:alnum:]]+)[[:blank:]]+\[(.*)\][[:blank:]]+(.*)/\1"\\\n"\3"\\\n"\2/p
+# 			t
+# 			s/^$prefix([[:alnum:]]+:[[:alnum:]]+)[[:blank:]]+\[(.*)\][[:blank:]]+(.*)/\1"\\\n"\3"\\\n"\2/p
+# 			t
+# 			s/^$prefix([[:alnum:]]+#[[:alnum:]]+)[[:blank:]]+\[(.*)\][[:blank:]]+(.*)/\1"\\\n"\3"\\\n"\2/p
+# 			t
+# 			s/^$prefix([[:alnum:]]+[:]{0,1}[[:alnum:]]*)[[:blank:]]*(.*)/\1"\\\n"\2"\\\n"/p
+# 			}"
+# 		# set -l sedcmd "/^$prefix($keywords)/{
+# 		# 	=
+# 		# 	h
+# 		# 	s/^$prefix([[:alpha:]]+[:]{0,1}[[:alpha:]]*)[[:blank:]]*\[(.*)\][[:blank:]]*(.*)/\1"\\\n"\3"\\\n"\2/p
+# 		# 	t
+# 		# 	s/^$prefix([[:alpha:]]+[:]{0,1}[[:alpha:]]*)[[:blank:]]*(.*)/\1"\\\n"\2"\\\n"/p
+# 		# 	}"
+# 		set _allitems (sed -E -n -e "$sedcmd" $filename); or return
+# # printf "%s\n" $_allitems
+# 		# Put each item in the appropriate list.
+# 		for i in (seq 1 4 (count $_allitems))
+# 			set -l item $_allitems[$i..(math $i + 3)]
 
-			# If there are no tags and an empty space.
-			test -z "$item[4]"; and set item[4] " "
+# 			# If there are no tags and an empty space.
+# 			test -z "$item[4]"; and set item[4] " "
 
-			switch (echo $item[2])
-			case WORK
-				set -a _work $item
-			case NEXT
-				set -a _next $item
-			case TODO 'TODO#*'
-				set -a _todo $item
-			case DONE 'DONE:*'
-				set -a _done $item
-			case GOAL 'GOAL:*'
-				set -a _goal $item
-			end
-		end
-	end
+# 			switch (echo $item[2])
+# 			case WORK
+# 				set -a _work $item
+# 			case NEXT
+# 				set -a _next $item
+# 			case TODO 'TODO#*'
+# 				set -a _todo $item
+# 			case DONE 'DONE:*'
+# 				set -a _done $item
+# 			case GOAL 'GOAL:*' 'GOAL#*'
+# 				set -a _goal $item
+# 			end
+# 		end
+# 	end
 
 
 	# Prints a list containing these elements:
@@ -189,19 +189,14 @@ function todo
 		# Who doesn't love sed?
 		set -l sedcmd "/^$prefix($keywords)/{
 			=
-			h
-			s/^$prefix([[:alnum:]]+[#]{0,1}[[:alnum:]][:]{0,1}[[:alpha:]]*)[[:blank:]]*\[(.*)\][[:blank:]]*(.*)/\1"\\\n"\3"\\\n"\2/p
+			s/^$prefix([[:alnum:]]+#{0,1}[[:alnum:]]*:{0,1}[[:alnum:]]*)[[:blank:]]+\[(.*)\][[:blank:]]+(.*)/\1"\\\n"\3"\\\n"\2/p
 			t
-			s/^$prefix([[:alnum:]]+[:]{0,1}[[:alpha:]]*)[[:blank:]]*\[(.*)\][[:blank:]]*(.*)/\1"\\\n"\3"\\\n"\2/p
-			t
-			s/^$prefix([[:alpha:]]+[#]{0,1}[[:alnum:]]*)[[:blank:]]*\[(.*)\][[:blank:]]*(.*)/\1"\\\n"\3"\\\n"\2/p
-			t
-			s/^$prefix([[:alpha:]]+[:]{0,1}[[:alpha:]]*)[[:blank:]]*(.*)/\1"\\\n"\2"\\\n"/p
+			s/^$prefix([[:alnum:]]+#{0,1}[[:alnum:]]*:{0,1}[[:alnum:]]*)[[:blank:]]+(.*)/\1"\\\n"\2"\\\n"/p
 			}"
 		set rawitems (sed -E -n -e "$sedcmd" $filename); or return
 
 		for i in (seq 1 4 (count $rawitems))
-			set -l r $rawitems[$i..(math $i + 4)]
+			set -l r $rawitems[$i..(math $i + 3)]
 			set -l item (string join '\r' $r)
 			set -a _allitems $item
 		end
@@ -224,7 +219,7 @@ function todo
 				set -a _todo $item
 			case DONE 'DONE:*'
 				set -a _done $item
-			case GOAL 'GOAL:*'
+			case GOAL 'GOAL:*' 'GOAL#*'
 				set -a _goal $item
 			end
 		end
@@ -357,7 +352,7 @@ function todo
 		or return
 
 		_cmd_register --action \
-			--help_text "List tasks." \
+			--help_text "Plan tasks." \
 			--opt_help "
 			  -F, --file FILE    Look in FILE for todos instead of WORK.txt.
 			  -f, --filter TAG   Only show tasks with the tag TAG.
@@ -379,9 +374,34 @@ function todo
 			return 0
 		end
 
+		# Get prioritized goals
+		set -l goals
+		set -l prioritygoals
+		set -l regulargoals
+		for g in $_goal
+			set -l goal (string split '\r' $g)
+			string match -qr '^GOAL#{0,1}(?<priority>\w*):{0,1}(?<alias>\w*)' $goal[2]
+			if test -n "$priority"
+				set -a prioritygoals (string join '\r' $priority $goal)
+			else
+				set -a regulargoals (string join '\r' $goal)
+			end
+		end
+
+		# Sort the priority items and add them to the goal list.
+		set -l sortedgoals (printf "%s\n" $prioritygoals | sort -n)
+		for item in $sortedgoals
+			# Cut the priority field from the item and save it in itemlist.
+			set -a goals (string join '\r' (string split '\r' $item)[2..])
+		end
+
+		for item in $regulargoals
+			set -a goals $item
+		end
+
 		# Gather all of the items that match the indicated criteria.
 		set -l items
-		for g in $_goal
+		for g in $goals
 			set -l goal (string split '\r' $g)
 			set -l alias (string split ':' $goal[2])[2]
 
