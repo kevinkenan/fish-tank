@@ -327,6 +327,11 @@ function todo
 
 			test -z "$item[4]"; and set item[4] " "
 
+			if test "$item[1]" = x
+				set -a out "$item[2]"
+				continue
+			end
+
 			if set -q _flag_T
 				set -a out (printf "%$lnumfmt %s◊%s◊%s\n" "$item[1]" "$item[2]" "$item[4]" "$item[3]")
 			else
@@ -340,6 +345,7 @@ function todo
 
 	function _todo:plan
 		set -l opts 
+		set -a opts "a/all"
 		set -a opts "w/no-work"
 		set -a opts "t/no-todo"
 		set -a opts "d/done"
@@ -364,7 +370,8 @@ function todo
 			  -n, --no-next      Don't include NEXT tasks.
 			  -p, --prefix PRE   Keywords will have PRE prepended.
 			  -T, --table        Print tasks in a table with tags.
-			  -l, --limit NUM    Don't print more then NUM TODO tasks.
+			  -l, --limit NUM    Don't print more then NUM TODO tasks
+			  -a, --all          Show all TODOs even those without a goal.
 			  -g, --goal GOAL    Only print tasks tagged with goal GOAL."
 		or return
 
@@ -476,6 +483,20 @@ function todo
 			end
 
 			set -a items (string join '\r' " " " " " " " ")
+		end
+
+		set -l extratasks
+		if set -q _flag_a
+			for t in $_work $_next $_todo
+				set -l task (string split '\r' $t)
+				string match -q "*^*" "$task[4]"; and continue
+				set -a extratasks $t
+			end
+		end
+
+		if test -n "$extratasks"
+			set -a items "x\rOrphaned\r\r"
+			set -a items $extratasks
 		end
 
 		# Set the amount of padding for printing the line number.
