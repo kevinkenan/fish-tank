@@ -325,6 +325,8 @@ function todo
 		for i in $items
 			set -l item (string split '\r' $i)
 
+			test -z "$item[4]"; and set item[4] " "
+
 			if set -q _flag_T
 				set -a out (printf "%$lnumfmt %s◊%s◊%s\n" "$item[1]" "$item[2]" "$item[4]" "$item[3]")
 			else
