@@ -5,6 +5,8 @@ function todo
 	set -gx _next
 	set -gx _todo
 	set -gx _done
+	set -gx _comp
+	set -gx _xxxx
 	set -x specialtags '@' '^' '~' '#' '>'
 
 	function _todo
@@ -91,74 +93,147 @@ function todo
 		printf "%s\n" $out | column -t -s '◊'
 	end
 
+	function _todo:history
+		set -l opts 
+		set -a opts "F/file="
+		set -a opts "i/include=+"
+		set -a opts "g/goal="
+		set -a opts "p/prefix="
+		set -a opts "r/reverse"
+		set -a opts "T/table"
+		set -a opts "t/tasks="
+		set -a opts "x/exclue=+"
+		argparse -n "$_cmdpath" $opts -- $_args
+		or return
 
-	# Prints a list containing these elements:
-	#   Line number
-	#   Keyword (with optional alias)
-	#   Task description
-	#   Tags if they exist
-	# for each task in the file. So for any element n, if (n-1) mod 4 = 0 it's
-	# a line number or if (n-1) mod 4 = 1 it's a keyword (WORK, TODO, DONE,
-	# etc.), or if (n-1) mod 4 = 2 it's a a task description, or finally if
-	# (n-1) mod 4 = 3 it's a set of tags.
-# 	function _todo:_load_items
-# 		set -l opts 
-# 		set -a opts "F/file="
-# 		set -a opts "p/prefix="
-# 		argparse -n "_load_tasks" $opts -- $argv
-# 		or return
+		_cmd_register --action \
+			--help_text "Examine completed tasks." \
+			--opt_help "
+			  -F, --file FILE    Look in FILE for todos instead of WORK.txt.
+			  -i, --include TAG  Only show tasks with the tag TAG.
+			  -g, --goal GOAL    Only show histor for goal GOAL.
+			  -p, --prefix PRE   Keywords will have PRE prepended.
+			  -r, --reverse      Reverse sort with oldest first.
+			  -T, --table        Print tasks in a table with tags.
+			  -t, --tasks KEY    Include KEY tasks along with DONE tasks.
+			                     Values for KEY are listed below.
+			  -x, --exclude TAG  Only show tasks without the tag TAG.
+			KEY can be one or more of:
+			  d   DONE tasks.
+			  g   GOAL tasks.
+			  n   NEXT tasks.
+			  t   TODO tasks.
+			  w   WORK tasks."
+		or return
 
-# 		set -l filename (select "$_flag_F" "WORK.txt")
-# 		set -l prefix "[[:blank:]]*"(select "$_flag_p" "")"[[:blank:]]*"
-# 		set -l keywords "GOAL"
-# 		set -a keywords "DONE"
-# 		set -a keywords "WORK"
-# 		set -a keywords "TODO"
-# 		set -a keywords "NEXT"
-# 		set -l keywords (string join "|" $keywords)
+		# Set the module variable _allitems.
+		_todo:_load_items_new --file "$_flag_F" --prefix "$_flag_p"
 
-# 		# Who doesn't love sed?
-# 		set -l sedcmd "/^$prefix($keywords)/{
-# 			=
-# 			h
-# 			s/^$prefix([[:alnum:]]+#[[:alnum:]]+:[[:alnum:]]+)[[:blank:]]+\[(.*)\][[:blank:]]+(.*)/\1"\\\n"\3"\\\n"\2/p
-# 			t
-# 			s/^$prefix([[:alnum:]]+:[[:alnum:]]+)[[:blank:]]+\[(.*)\][[:blank:]]+(.*)/\1"\\\n"\3"\\\n"\2/p
-# 			t
-# 			s/^$prefix([[:alnum:]]+#[[:alnum:]]+)[[:blank:]]+\[(.*)\][[:blank:]]+(.*)/\1"\\\n"\3"\\\n"\2/p
-# 			t
-# 			s/^$prefix([[:alnum:]]+[:]{0,1}[[:alnum:]]*)[[:blank:]]*(.*)/\1"\\\n"\2"\\\n"/p
-# 			}"
-# 		# set -l sedcmd "/^$prefix($keywords)/{
-# 		# 	=
-# 		# 	h
-# 		# 	s/^$prefix([[:alpha:]]+[:]{0,1}[[:alpha:]]*)[[:blank:]]*\[(.*)\][[:blank:]]*(.*)/\1"\\\n"\3"\\\n"\2/p
-# 		# 	t
-# 		# 	s/^$prefix([[:alpha:]]+[:]{0,1}[[:alpha:]]*)[[:blank:]]*(.*)/\1"\\\n"\2"\\\n"/p
-# 		# 	}"
-# 		set _allitems (sed -E -n -e "$sedcmd" $filename); or return
-# # printf "%s\n" $_allitems
-# 		# Put each item in the appropriate list.
-# 		for i in (seq 1 4 (count $_allitems))
-# 			set -l item $_allitems[$i..(math $i + 3)]
+		if test -z "$_allitems"
+			echo "No tasks found in $filename"
+			return 0
+		end
 
-# 			# If there are no tags and an empty space.
-# 			test -z "$item[4]"; and set item[4] " "
+		# Only include requested items that aren't empty.
+		set -l lists
+		test -n "$_done"; and set -a lists _done
+		test -n "$_comp"; and set -a lists _comp
+		if set -q _flag_t
+			set -l keys (string split '' $_flag_i)
+			for k in $keys 
+				switch $k
+				case n 
+					test -n "$_nope"; and set -a lists _nope
+				end
+			end
+		end
 
-# 			switch (echo $item[2])
-# 			case WORK
-# 				set -a _work $item
-# 			case NEXT
-# 				set -a _next $item
-# 			case TODO 'TODO#*'
-# 				set -a _todo $item
-# 			case DONE 'DONE:*'
-# 				set -a _done $item
-# 			case GOAL 'GOAL:*' 'GOAL#*'
-# 				set -a _goal $item
-# 			end
-# 		end
-# 	end
+		# Set the amount of padding for printing the line number.
+		set -l digits 1
+
+		# If we're focused on a specific goal, add that goal to the main item list.
+		set -l itemlist
+		if set -q _flag_g
+			for g in $_goal $_comp
+				set -l goal (string split '\r' $g)
+				set -l name (string split ':' $goal[2])[2]
+				if test "$name" = "$_flag_g"
+					set -a itemlist $g
+					break
+				end
+			end
+		end
+
+		# Gather all of the items that match the indicated criteria.
+		set -l items
+		set -l datelessitems
+		for list in $lists
+			for l in $$list
+				set -l item (string split '\r' $l)
+
+				# If we're focused on a specific goal, ignore tasks for other
+				# goals.
+				if set -q _flag_g
+					_todo:_tag_filter "^$_flag_g" "$item[4]"; or continue
+				end
+
+				# Filter by tag.
+				if set -q _flag_i
+					_todo:_tag_filter "$_flag_i" "$item[4]"; or continue
+				end
+
+				# Filter by excluded tag.
+				if set -q _flag_x
+					_todo:_tag_filter -x "$_flag_x" "$item[4]"; or continue
+				end
+
+				# Set the number of digits in the largest line number.
+				set -l d (string length $item[1])
+				test $d -gt $digits; and set digits $d
+
+				# Look for a done date in the tags.
+				set -e founddate 
+				for t in $item[4]
+					if set priority (string split '~' $t)[2]
+						set -l newitem $priority
+						set -a newitem $item 
+						set -a items (string join '\r' $newitem)
+						set founddate
+						break
+					end
+				end
+				if not set -q founddate
+					set -a datelessitems (string join '\r' $item)
+				end
+			end
+		end
+
+		# Determine the sort order
+		if set -q _flag_r
+			set sortcmd sort
+		else
+			set sortcmd sort -r
+		end
+
+		# Sort the priority items and add them to the item list.
+		set -l sorteditems (printf "%s\n" $items | $sortcmd)
+		for item in $sorteditems
+			# Cut the priority field from the item and save it in itemlist.
+			set -a itemlist (string join '\r' (string split '\r' $item)[2..])
+		end
+
+		if test -n "$datelessitems"
+			set -a itemlist " "
+			set -a itemlist $datelessitems
+		end
+
+		if test (count $itemlist) -eq 0
+			echo "No history."
+			return
+		end
+
+		_todo:_print_items $_flag_T -d $digits $itemlist
+	end
 
 
 	# Prints a list containing these elements:
@@ -184,6 +259,8 @@ function todo
 		set -a keywords "WORK"
 		set -a keywords "TODO"
 		set -a keywords "NEXT"
+		set -a keywords "COMP"
+		set -a keywords "XXXX"
 		set -l keywords (string join "|" $keywords)
 
 		# Who doesn't love sed?
@@ -221,6 +298,8 @@ function todo
 				set -a _done $item
 			case GOAL 'GOAL:*' 'GOAL#*'
 				set -a _goal $item
+			case COMP 'COMP:*' 'COMP#*'
+				set -a _comp $item
 			end
 		end
 	end
@@ -229,10 +308,7 @@ function todo
 	function _todo:list 
 		set -l opts 
 		set -a opts "w/no-work"
-		set -a opts "t/no-todo"
-		set -a opts "d/no-done"
-		set -a opts "n/no-next"
-		set -a opts "g/no-goals"
+		set -a opts "t/task="
 		set -a opts "F/file="
 		set -a opts "p/prefix="
 		set -a opts "f/filter=+"
@@ -242,18 +318,21 @@ function todo
 		or return
 
 		_cmd_register --action \
-			--help_text "List tasks." \
+			--help_text "List tasks. By default only WORK and NEXT tasks are shown." \
 			--opt_help "
 			  -F, --file FILE    Look in FILE for todos instead of WORK.txt.
-			  -f, --filter TAG   Only show tasks with the tag TAG.
+			  -i, --include TAG  Only show tasks with the tag TAG.
 			  -x, --exclude TAG  Only show tasks without the tag TAG.
-			  -g, --goal         Include GOAL items.
-			  -w, --work         Include WORK tasks.
-			  -n, --next         Include NEXT tasks.
-			  -t, --todo         Include TODO tasks.
-			  -d, --done         Include DONE tasks.
 			  -p, --prefix PRE   Keywords will have PRE prepended.
-			  -T, --table        Print tasks in a table with tags."
+			  -t, --tasks KEY    Include KEY tasks along with DONE tasks. Values for KEY are listed below.
+			  -T, --table        Print tasks in a table with tags.
+			KEY can be one or more of:
+			  c   COMP tasks.
+			  d   DONE tasks.
+			  g   GOAL tasks.
+			  n   NEXT tasks.
+			  t   TODO tasks.
+			  w   WORK tasks."
 		or return
 
 		# Set the module variable _allitems.
@@ -266,11 +345,29 @@ function todo
 
 		# Only include requested items that aren't empty.
 		set -l lists
-		test -n "$_goal"; and set -q _flag_g; and set -a lists _goal
-		test -n "$_work"; and set -q _flag_w; and set -a lists _work
-		test -n "$_next"; and set -q _flag_n; and set -a lists _next
-		test -n "$_todo"; and set -q _flag_t; and set -a lists _todo
-		test -n "$_done"; and set -q _flag_d; and set -a lists _done
+		# test -n "$_done"; and set -a lists _done
+		if set -q _flag_t
+			set -l keys (string split '' $_flag_t)
+			for k in $keys
+				switch (echo $k)
+				case c
+					test -n "$_comp"; and set -a lists _comp
+				case d
+					test -n "$_done"; and set -a lists _done
+				case g
+					test -n "$_goal"; and set -a lists _goal
+				case n 
+					test -n "$_next"; and set -a lists _next
+				case t
+					test -n "$_todo"; and set -a lists _todo
+				case w
+					test -n "$_work"; and set -a lists _work
+				case '*'
+					echo "error: unrecognized KEY $k"
+					return 1
+				end
+			end
+		end
 
 		# If nothing was specified, default to printing just the _work and
 		# _next lists.
@@ -414,7 +511,7 @@ function todo
 			set -l goal (string split '\r' $g)
 			set -l alias (string split ':' $goal[2])[2]
 
-			# We're only working with a specific goal.
+			# If we're focused on a specific goal, ignore other goals.
 			if set -q _flag_g
 				test "$alias" = "$_flag_g"; or continue
 			end
@@ -485,6 +582,7 @@ function todo
 			set -a items (string join '\r' " " " " " " " ")
 		end
 
+		# Gather tasks with no goal if asked.
 		set -l extratasks
 		if set -q _flag_a
 			for t in $_work $_next $_todo
@@ -494,6 +592,7 @@ function todo
 			end
 		end
 
+		# Add any tasks with no goal.
 		if test -n "$extratasks"
 			set -a items "x\rOrphaned\r\r"
 			set -a items $extratasks
