@@ -45,54 +45,11 @@ function todo
 		or return
 
 		# Set the module variable _allitems.
-		_todo:_load_items_new --file "$_flag_F" --prefix "$_flag_p"
+		_todo:_load_items_new --file "$_flag_F" --prefix "$_flag_p"; or return
 
-		if test -z "$_allitems"
-			echo "No tasks found in $filename"
-			return 0
-		end
-
-		# Place the task in $items or $datelessitems based on the
-		# existence of a completion date.
-		set -l dateditems
-		set -l datelessitems
-		for item_ in $_done $_comp (set -q _flag_c; and printf "%s\n" $_xxxx)
-			set -l item (string split '\r' $item_)
-			set -e founddate 
-			for tag in $item[4]
-				# Look through all of the tags for one that begins with '~'.
-				if set date (string split '~' $tag)
-					set -l newitem $date[2]
-					set -a newitem $item 
-					set -a dateditems (string join '\r' $newitem)
-					set founddate
-					break
-				end
-			end
-			if not set -q founddate
-				set -a datelessitems (string join '\r' $item)
-			end
-		end
-
-		set -l itemlist
-
-		# Determine the sort order
-		if set -q _flag_r
-			set sortcmd sort -s -k1n 
-		else
-			set sortcmd sort -s -k1,1rn
-		end
-
-		# Sort the dated items and add them to the item list.
-		set -l sorteditems (printf "%s\n" $dateditems | $sortcmd); or return
-
-		# Cut the date field from the item and save the item in itemlist.
-		for item in $sorteditems
-			set -a itemlist (string join '\r' (string split '\r' $item)[2..])
-		end
-
-		# Add the dateless items
-		set -a itemlist $datelessitems
+		# Sort the unsorted items into $itemlist.
+		set -l unsorted $_done $_comp (set -q _flag_c; and printf "%s\n" $_xxxx)
+		set -l itemlist (_todo:_tag_sorter $_flag_r --date '~' $unsorted)
 
 		# Set the amount of padding for printing the line number.
 		set -l digits 1
@@ -102,11 +59,7 @@ function todo
 			test $d -gt $digits; and set digits $d
 		end
 
-		if set -q _flag_l
-			_todo:_print_items $_flag_D $_flag_T -d $digits $itemlist[1..$_flag_l]
-		else
-			_todo:_print_items $_flag_D $_flag_T -d $digits $itemlist
-		end
+		_todo:_print_items $_flag_D $_flag_T -d $digits $itemlist[1..(select "$_flag_l" -1)]
 	end
 
 
@@ -805,6 +758,12 @@ function todo
 			case XXXX 'XXXX:*' 'XXXX#*'
 				set -a _xxxx $item
 			end
+		end
+
+		# Were there any tasks?
+		if test -z "$_allitems"
+			echo "No tasks found in $filename" >&2
+			return 2
 		end
 	end
 
