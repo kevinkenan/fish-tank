@@ -7,7 +7,7 @@ function todo
 	set -gx _done
 	set -gx _comp
 	set -gx _xxxx
-	set -x specialtags '@' '^' '~' '>'
+	set -gx specialtags '@' '^' '~' '>'
 
 
 	function _todo
@@ -193,12 +193,11 @@ function todo
 		set -l opts 
 		set -a opts "a/all"
 		set -a opts "F/file="
-		set -a opts "f/filter=+"
+		set -a opts "i/include=+"
 		set -a opts "l#limit"
 		set -a opts "p/prefix="
 		set -a opts "T/table"
-		set -a opts "t/task="
-		set -a opts "w/no-work"
+		set -a opts "t/tasks="
 		set -a opts "x/exclue=+"
 		argparse -n "$_cmdpath" $opts -- $_args
 		or return
@@ -272,8 +271,8 @@ function todo
 				set -l item (string split '\r' $l)
 
 				# Filter by tag.
-				if set -q _flag_f
-					_todo:_tag_filter "$_flag_f" "$item[4]"; or continue
+				if set -q _flag_i
+					_todo:_tag_filter "$_flag_i" "$item[4]"; or continue
 				end
 
 				# Filter by excluded tag.
@@ -297,6 +296,7 @@ function todo
 		set -l last (select "$_flag_l" -1)
 		_todo:_print_items $_flag_T -d $digits $items[1..$last]
 	end
+
 
 	function _todo:orphans
 		set -l opts 
