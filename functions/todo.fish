@@ -44,6 +44,8 @@ function todo
 			  "
 		or return
 
+		set -q _flag_D; and set dateflag -D '~'
+
 		# Set the module variable _allitems.
 		_todo:_load_items --file "$_flag_F" --prefix "$_flag_p"; or return
 
@@ -59,7 +61,7 @@ function todo
 			test $d -gt $digits; and set digits $d
 		end
 
-		_todo:_print_items $_flag_D $_flag_T -d $digits $itemlist[1..(select "$_flag_l" -1)]
+		_todo:_print_items $dateflag $_flag_T -d $digits $itemlist[1..(select "$_flag_l" -1)]
 	end
 
 
@@ -93,6 +95,8 @@ function todo
 			  -T, --table        Print tasks in a table with tags.
 			  "
 		or return
+
+		set -q _flag_D; and set dateflag -D '~'
 
 		# Set the module variable _allitems.
 		_todo:_load_items --file "$_flag_F" --prefix "$_flag_p"; or return
@@ -154,7 +158,7 @@ function todo
 			test $d -gt $digits; and set digits $d
 		end
 
-		_todo:_print_items $_flag_D $_flag_T -d $digits $items
+		_todo:_print_items $dateflag $_flag_T -d $digits $items
 
 		# Gather tasks with no goal if asked.
 		set -l extratasks
@@ -180,7 +184,7 @@ function todo
 				test $d -gt $digits; and set digits $d
 			end
 
-			_todo:_print_items $_flag_D $_flag_T -d $digits $items[1..(select "$_flag_l" -1)]
+			_todo:_print_items $dateflag $_flag_T -d $digits $items[1..(select "$_flag_l" -1)]
 		end
 	end
 
@@ -356,7 +360,7 @@ function todo
 			test $d -gt $digits; and set digits $d
 		end
 
-		_todo:_print_items $_flag_D $_flag_T -d $digits $orphans
+		_todo:_print_items $_flag_T -d $digits $orphans
 	end
 
 
@@ -364,6 +368,7 @@ function todo
 		set -l opts 
 		set -a opts "a/all"
 		set -a opts "d/done"
+		set -a opts "D/date-table"
 		set -a opts "F/file="
 		set -a opts "f/filter="
 		set -a opts "g/goal="
@@ -381,6 +386,7 @@ function todo
 			--opt_help "
 			  -a, --attached     Only print tasks attached to a goal.
 			  -d, --done         Include completed tasks.
+			  -D, --date-table   Print tasks in a table with the due date.
 			  -F, --file FILE    Look in FILE for todos instead of WORK.txt.
 			  -f, --filter TAG   Only show tasks with the tag TAG.
 			  -g, --goal GOAL    Only print tasks tagged with goal GOAL.
@@ -393,77 +399,33 @@ function todo
 			  "
 		or return
 
+		set -q _flag_D; and set dateflag -D @
+
 		# Set the module variable _allitems.
 		_todo:_load_items --file "$_flag_F" --prefix "$_flag_p"; or return
 
 		# Get prioritized goals
-		set -l goals
-		set -l dateditems
-		set -l datelessitems
+		set -l goals (_todo:_tag_sorter -r --date '@' $_goal)
 
-		# Place the task in $items or $datelessitems based on the
-		# existence of a completion date.
-		for g in $_goal
-			set -l goal (string split '\r' $g)
-			set -e founddate 
-			for t in $goal[4]
-				# Look through all of the tags for one that begins with 
-				# '~'.
-				if set date (string split '@' $t)[2]
-					set -l newitem $date
-					set -a newitem $goal 
-					set -a dateditems (string join '\r' $newitem)
-					set founddate
-					break
-				end
-			end
-			if not set -q founddate
-				set -a datelessitems (string join '\r' $goal)
-			end
-		end
-
-		# Sort the dated items and add them to the item list.
-		set -l sorteditems (printf "%s\n" $dateditems | sort -s -k1,1n)
-		for item in $sorteditems
-			# Cut the priority field from the item and save it in itemlist.
-			set -a goals (string join '\r' (string split '\r' $item)[2..])
-		end
-
-		# Add the dateless items to the item list.
-		for item in $datelessitems
-			set -a goals $item
-		end
-
-		# Gather all of the items that match the indicated criteria.
 		set -l items
 		for g in $goals
 			set -l goal (string split '\r' $g)
 			set -l alias (string split ':' $goal[2])[2]
 
-			# If we're focused on a specific goal, ignore other goals.
+			# If we're focused on specific goals, ignore other goals.
 			if set -q _flag_g
-				test "$alias" = "$_flag_g"; or continue
+				contains "$alias" $_flag_g; or continue
 			end
 
-			# Add the goal to the items list.
-			set -a items (string join '\r' $goal)
-
-			set -l mainlists
-			set -q _flag_w; or set -a mainlists _work
-			set -q _flag_n; or set -a mainlists _next
-			set -q _flag_t; or set -a mainlists _todo
-
-			for list in $mainlists
-				set -l dateditems
-				set -l datelessitems
-
-				for t in $$list
-					set -l item (string split '\r' $t)
+			# Gather all of the completed tasks for the current goal.
+			set -l itemlist
+			for list in _work _next _todo
+				set -l goalitems
+				for item_ in $$list
+					set -l item (string split '\r' $item_)
 					set -l tags (select (string split ' ' $item[4]) " ")
 
-					# Add the item to the items list if it is associated with
-					# the goal alias.
-					# contains -- "^$alias" $tags; or continue
+					# Skip items that are not associated with the current goal.
 					_todo:_tag_filter "^$alias" "$item[4]"; or continue
 
 					# Filter by tag.
@@ -476,51 +438,25 @@ function todo
 						_todo:_tag_filter -x "$_flag_x" "$item[4]"; or continue
 					end
 
-					# Place the task in $items or $datelessitems based on the
-					# existence of a completion date.
-					set -e founddate 
-					for t in $item[4]
-						# Look through all of the tags for one that begins with 
-						# '~'.
-						if set date (string split '@' $t)[2]
-							set -l newitem $date
-							set -a newitem $item 
-							set -a dateditems (string join '\r' $newitem)
-							set founddate
-							break
-						end
-					end
-					if not set -q founddate
-						set -a datelessitems (string join '\r' $item)
-					end
-
+					set -a goalitems (string join '\r' $item)
 				end
 
-				set -l itemlist
+				test -z "$goalitems"; and continue
+				set -a itemlist (_todo:_tag_sorter -r --date '@' $goalitems)
+			end	
 
-				# Sort the dated items and add them to the item list.
-				set -l sorteditems (printf "%s\n" $dateditems | sort -s -k1,1n)
-				for item in $sorteditems
-					# Cut the priority field from the item and save it in itemlist.
-					set -a itemlist (string join '\r' (string split '\r' $item)[2..])
-				end
+			# If $itemlist is empty (i.e. there are no completed tasks), skip
+			# this goal unless the goal itself is completed (COMP).
+			set -l key (string split ':' $goal[2])[1]
+			test -z "$itemlist" -a "$key" != "COMP"; and continue
 
-				# Add the dateless items to the item list.
-				for item in $datelessitems
-					set -a itemlist $item
-				end
-
-				# Add the item list to the master list of items, honoring the
-				# todo limit if set.
-				if set -q _flag_l; and test "$list" = "_todo"
-					set -a items (string join '\r' (string split '\r' $itemlist[1..$_flag_l]))
-				else
-					set -a items $itemlist
-				end
-			end
-
+			# Populate the $items with the goal and the item list.
+			set -a items (string join '\r' $goal)
+			set -a items $itemlist[1..(select "$_flag_l" -1)]
 			set -a items (string join '\r' " " " " " " " ")
 		end
+		# All tasks associated with goals have been placed into $items and
+		# sorted.
 
 		# Set the amount of padding for printing the line number.
 		set -l digits 1
@@ -530,68 +466,31 @@ function todo
 			test $d -gt $digits; and set digits $d
 		end
 
-		_todo:_print_items $_flag_T -d $digits $items
+		_todo:_print_items $dateflag $_flag_T -d $digits $items
 
-		# Print tasks with no goal unless asked to supress.
-		if not set -q _flag_a
-			set -l items
-			set -l extratasks
+		# Return if asked to only print tasks attached to goals...
+		set -q _flag_a; and return
 
-			for t in $_work $_next $_todo
-				set -l task (string split '\r' $t)
+		# ...Otherwise print tasks without attached goals.
+		set -l itemlist
+		for list in _work _next _todo
+			set -l unsorted
+			for item_ in $$list
+				set -l task (string split '\r' $item_)
 				string match -q "*^*" "$task[4]"; and continue
-				set -a extratasks $t
+				set -a unsorted $item_
 			end
+			test -z "$unsorted"; and continue
+			set -a itemlist (_todo:_tag_sorter -r --date '@' $unsorted); or return
+		end
 
-			set -l dateditems
-			set -l datelessitems
-			for task in $extratasks
-				set -l item (string split '\r' $task)
-				# Place the task in $items or $datelessitems based on the
-				# existence of a completion date.
-				set -e founddate 
-				for t in $item[4]
-					# Look through all of the tags for one that begins with 
-					# '~'.
-					if set date (string split '@' $t)[2]
-						set -l newitem $date
-						set -a newitem $item 
-						set -a dateditems (string join '\r' $newitem)
-						set founddate
-						break
-					end
-				end
-				if not set -q founddate
-					set -a datelessitems (string join '\r' $item)
-				end
-			end
+		# Add the item list to the master list of items, honoring the
+		# todo limit if set.
+		set -l items $itemlist[1..(select "$_flag_l" -1)]
 
-			set -l itemlist
-
-			# Sort the dated items and add them to the item list.
-			set -l sorteditems (printf "%s\n" $dateditems | sort -s -k1,1n)
-			for item in $sorteditems
-				# Cut the priority field from the item and save it in itemlist.
-				set -a itemlist (string join '\r' (string split '\r' $item)[2..])
-			end
-
-			# Add the dateless items to the item list.
-			for item in $datelessitems
-				set -a itemlist $item
-			end
-
-			# Add the item list to the master list of items, honoring the
-			# todo limit if set.
-			if set -q _flag_l; and test "$list" = "_todo"
-				set -a items (string join '\r' (string split '\r' $itemlist[1..$_flag_l]))
-			else
-				set -a items $itemlist
-			end
-
-			if test -n "$items"
-				printf "%s\n" "### Tasks unattached to any goal:"
-				_todo:_print_items $_flag_T -d $digits $items
-			end
+		if test -n "$items"
+			printf "%s\n" "### Tasks unattached to any goal:"
+			_todo:_print_items $dateflag $_flag_T -d $digits $items
 		end
 	end
 
@@ -753,11 +652,12 @@ function todo
 		set -l opts 
 		set -a opts "T/table" 
 		set -a opts "d/digits="
-		set -a opts "D/date"
+		set -a opts "D/date="
 		argparse -n "_print_items" -x D,T $opts -- $argv
 		or return
 
 		set -l digits (select $_flag_d 3)
+		set -l datechar (select "$_flag_D" "~")
 		set -l items $argv
 
 		# Format the items.
@@ -776,7 +676,7 @@ function todo
 			if set -q _flag_T
 				set -a out (printf "%$lnumfmt %s◊%s◊%s\n" "$item[1]" "$item[2]" "$item[4]" "$item[3]")
 			else if set -q _flag_D
-				string match -qr '(?<date>~\d{6})' "$item[4]"; or set date " "
+				string match -qr "(?<date>$datechar\d+[\.]*\d*)" "$item[4]"; or set date " "
 				set -a out (printf "%$lnumfmt %s◊%s◊%s\n" "$item[1]" "$item[2]" "$date" "$item[3]")
 			else
 				set -a out (printf "%$lnumfmt %s◊◊%s\n" "$item[1]" "$item[2]" "$item[3]")
