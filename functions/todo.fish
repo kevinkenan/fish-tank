@@ -186,14 +186,12 @@ function todo
 				contains "$alias" $_flag_g; or continue
 			end
 
-			# Gather items for a goal.
-			set -l dateditems
-			set -l datelessitems
-
-			# Gather all of the completed tasks for the current goal.
-			# Tasks with completion dates are placed into the $items list.
+			# Gather all of the completed tasks for the current goal. Tasks
+			# with completion dates are placed into the $dateditems list.
 			# Tasks without completion dates are placed into the
 			# $datelessitems list.
+			set -l dateditems
+			set -l datelessitems
 			for item_ in $_done (set -q _flag_c; and printf "%s\n" $_xxxx)
 				set -l item (string split '\r' $item_)
 				set -l tags (select (string split ' ' $item[4]) " ")
@@ -252,6 +250,8 @@ function todo
 				set -a itemlist $item
 			end
 
+			set -l itemlist (_todo:_tag_sorter --date '~' )
+
 			# Skip in progress goals that don't have DONE tasks. However,
 			# we do want to keep completed goals (COMP) that have no
 			# completed child tasks.
@@ -272,16 +272,6 @@ function todo
 
 			set -a items $datelessitems
 			set -a items (string join '\r' " " " " " " " ")
-		end			
-
-		# Gather tasks with no goal if asked.
-		set -l extratasks
-		if set -q _flag_a
-			for t in $_done
-				set -l task (string split '\r' $t)
-				string match -q "*^*" "$task[4]"; and continue
-				set -a extratasks $t
-			end
 		end
 
 		# Set the amount of padding for printing the line number.
@@ -294,19 +284,31 @@ function todo
 
 		_todo:_print_items $_flag_D $_flag_T -d $digits $items
 
-		# Print tasks with no goal if asked
+		# Gather tasks with no goal if asked.
+		set -l extratasks
+		if set -q _flag_a
+			for t in $_done
+				set -l task (string split '\r' $t)
+				string match -q "*^*" "$task[4]"; and continue
+				set -a extratasks $t
+			end
+		end
+
+		# Print tasks with no goal
 		if test -n "$extratasks"
 			echo "Done items with no assigned goal."
 
+			set items (_todo:_tag_sorter --date '~' $extratasks); or return
+
 			# Set the amount of padding for printing the line number.
 			set -l digits 1
-			for i in $extratasks 
+			for i in $items 
 				set -l item (string split '\r' $i)
 				set -l d (string length $item[1])
 				test $d -gt $digits; and set digits $d
 			end
 
-			_todo:_print_items $_flag_D $_flag_T -d $digits $extratasks
+			_todo:_print_items $_flag_D $_flag_T -d $digits $items
 		end
 	end
 
@@ -946,26 +948,28 @@ function todo
 	end
 
 
-	# Sort one of the item lists by a tag.
+	# Sort one of the item lists by a completions date tag. Items with no
+	# completion date are listed at the end.
 	function _todo:_tag_sorter
 		set -l opts 
+		set -a opts "D/date="
 		set -a opts "r/reverse"
 		argparse -n "_tag_sorter" $opts -- $argv
 		or return
 
-		set -l listname $argv[1]
-		set -l sorting $argv[2]
+		set -l datechar (select "$_flag_D" "~")
+		set -l unsorted $argv
 
 		# Place the task in $items or $datelessitems based on the
 		# existence of a completion date.
 		set -l dateditems
 		set -l datelessitems
-		set -e founddate 
-		for item_ in $$listname
+		for item_ in $unsorted
 			set -l item (string split '\r' $item_)
+			set -e founddate 
 			for tag in $item[4]
 				# Look through all of the tags for one that begins with the sortkey.
-				if set sortkey (string split '~' $tag)[2]
+				if set sortkey (string split $datechar $tag)[2]
 					set -l newitem $sortkey
 					set -a newitem $item 
 					set -a dateditems (string join '\r' $newitem)
@@ -994,8 +998,9 @@ function todo
 			set -a itemlist (string join '\r' (string split '\r' $item)[2..])
 		end
 
-		set $listname $itemlist
-		return 0
+		set -a itemlist $datelessitems
+
+		printf "%s\n" $itemlist
 	end
 
 
