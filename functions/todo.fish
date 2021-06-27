@@ -56,13 +56,13 @@ function todo
 		# existence of a completion date.
 		set -l dateditems
 		set -l datelessitems
-		set -e founddate 
 		for item_ in $_done $_comp (set -q _flag_c; and printf "%s\n" $_xxxx)
 			set -l item (string split '\r' $item_)
+			set -e founddate 
 			for tag in $item[4]
-				# Look through all of the tags for one that begins with the sortkey.
-				if set sortkey (string split '~' $tag)[2]
-					set -l newitem $sortkey
+				# Look through all of the tags for one that begins with '~'.
+				if set date (string split '~' $tag)
+					set -l newitem $date[2]
 					set -a newitem $item 
 					set -a dateditems (string join '\r' $newitem)
 					set founddate
