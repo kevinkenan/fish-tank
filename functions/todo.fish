@@ -149,35 +149,10 @@ function todo
 			return 0
 		end
 
-		# Get prioritized goals
-		set -l goals
-		set -l prioritygoals
-		set -l regulargoals
-		for g in $_goal $_comp
-			set -l goal (string split '\r' $g)
-			string match -qr '^GOAL#{0,1}(?<priority>\w*):{0,1}(?<alias>\w*)' $goal[2]
-			if test -n "$priority"
-				set -a prioritygoals (string join '\r' $priority $goal)
-			else
-				set -a regulargoals (string join '\r' $goal)
-			end
-		end
-
-		# Sort the priority items and add them to the goal list.
-		set -l sortedgoals (printf "%s\n" $prioritygoals | sort -n)
-		for item in $sortedgoals
-			# Cut the priority field from the item and save it in itemlist.
-			set -a goals (string join '\r' (string split '\r' $item)[2..])
-		end
-
-		for item in $regulargoals
-			set -a goals $item
-		end
-
 		# For each goal, gather all of its DONE items and sort them by
 		# completion date.
 		set -l items
-		for g in $goals
+		for g in $_goal $_comp
 			set -l goal (string split '\r' $g)
 			set -l alias (string split ':' $goal[2])[2]
 
@@ -186,18 +161,13 @@ function todo
 				contains "$alias" $_flag_g; or continue
 			end
 
-			# Gather all of the completed tasks for the current goal. Tasks
-			# with completion dates are placed into the $dateditems list.
-			# Tasks without completion dates are placed into the
-			# $datelessitems list.
-			set -l dateditems
-			set -l datelessitems
+			# Gather all of the completed tasks for the current goal.
+			set -l goalitems
 			for item_ in $_done (set -q _flag_c; and printf "%s\n" $_xxxx)
 				set -l item (string split '\r' $item_)
 				set -l tags (select (string split ' ' $item[4]) " ")
 
-				# Add the item to the items list if it is associated with
-				# the goal alias.
+				# Skip items that are not associated with the current goal.
 				_todo:_tag_filter "^$alias" "$item[4]"; or continue
 
 				# Filter by tag.
@@ -210,69 +180,23 @@ function todo
 					_todo:_tag_filter -x "$_flag_x" "$item[4]"; or continue
 				end
 
-				# Place the task in $items or $datelessitems based on the
-				# existence of a completion date.
-				set -e founddate 
-				for t in $item[4]
-					# Look through all of the tags for one that begins with 
-					# '~'.
-					if set date (string split '~' $t)[2]
-						set -l newitem $date
-						set -a newitem $item 
-						set -a dateditems (string join '\r' $newitem)
-						set founddate
-						break
-					end
-				end
-				if not set -q founddate
-					set -a datelessitems (string join '\r' $item)
-				end
+				set -a goalitems (string join '\r' $item)
 			end
 
-			set -l itemlist
+			set -l itemlist (_todo:_tag_sorter $_flag_r --date '~' $goalitems)			
 
-			# Determine the sort order
-			if set -q _flag_r
-				set sortcmd sort -s
-			else
-				set sortcmd sort -s -k1,1r
-			end
-
-			# Sort the dated items and add them to the item list.
-			set -l sorteditems (printf "%s\n" $dateditems | $sortcmd)
-			for item in $sorteditems
-				# Cut the date field from the item and save the time in itemlist.
-				set -a itemlist (string join '\r' (string split '\r' $item)[2..])
-			end
-
-			# Add the dateless items to the item list.
-			for item in $regularitems
-				set -a itemlist $item
-			end
-
-			set -l itemlist (_todo:_tag_sorter --date '~' )
-
-			# Skip in progress goals that don't have DONE tasks. However,
-			# we do want to keep completed goals (COMP) that have no
-			# completed child tasks.
+			# If $itemlist is empty (i.e. there are no completed tasks), skip
+			# this goal unless the goal itself is completed (COMP).
 			set -l key (string split ':' $goal[2])[1]
 			test -z "$itemlist" -a "$key" != "COMP"; and continue
 
-			# Add the goal to the items list.
+			# Populate the $items with the goal and the item list.
 			set -a items (string join '\r' $goal)
-
-			# Add the item list to the master list of items, honoring the
-			# item limit if set.
-			if set -q _flag_l; 
-				set -a items (string join '\r' (string split '\r' $itemlist[1..$_flag_l]))
-			else
-				# test -z "$itemlist"; and continue
-				set -a items $itemlist
-			end
-
-			set -a items $datelessitems
+			set -a items $itemlist[1..(select "$_flag_l" -1)]
 			set -a items (string join '\r' " " " " " " " ")
 		end
+		# All tasks associated with goals have been placed into $items and
+		# sorted.
 
 		# Set the amount of padding for printing the line number.
 		set -l digits 1
@@ -308,7 +232,7 @@ function todo
 				test $d -gt $digits; and set digits $d
 			end
 
-			_todo:_print_items $_flag_D $_flag_T -d $digits $items
+			_todo:_print_items $_flag_D $_flag_T -d $digits $items[1..(select "$_flag_l" -1)]
 		end
 	end
 
@@ -986,9 +910,9 @@ function todo
 
 		# Determine the sort order
 		if set -q _flag_r
-			set sortcmd sort -k1n -k2n
+			set sortcmd sort -s -k1,1n
 		else
-			set sortcmd sort -k1rn -k2rn
+			set sortcmd sort -s -k1,1rn
 		end
 
 		# Sort the dated items and add them to the item list.
