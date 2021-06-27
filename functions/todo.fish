@@ -45,7 +45,7 @@ function todo
 		or return
 
 		# Set the module variable _allitems.
-		_todo:_load_items_new --file "$_flag_F" --prefix "$_flag_p"; or return
+		_todo:_load_items --file "$_flag_F" --prefix "$_flag_p"; or return
 
 		# Sort the unsorted items into $itemlist.
 		set -l unsorted $_done $_comp (set -q _flag_c; and printf "%s\n" $_xxxx)
@@ -95,12 +95,7 @@ function todo
 		or return
 
 		# Set the module variable _allitems.
-		_todo:_load_items_new --file "$_flag_F" --prefix "$_flag_p"
-
-		if test -z "$_allitems"
-			echo "No tasks found in $filename"
-			return 0
-		end
+		_todo:_load_items --file "$_flag_F" --prefix "$_flag_p"; or return
 
 		# For each goal, gather all of its DONE items and sort them by
 		# completion date.
@@ -226,12 +221,7 @@ function todo
 		or return
 
 		# Set the module variable _allitems.
-		_todo:_load_items_new --file "$_flag_F" --prefix "$_flag_p"
-
-		if test -z "$_allitems"
-			echo "No tasks found in $filename"
-			return 0
-		end
+		_todo:_load_items --file "$_flag_F" --prefix "$_flag_p"; or return
 
 		if set -q _flag_a
 			set _flag_t "wntgdcx"
@@ -323,12 +313,7 @@ function todo
 		or return
 
 		# Set the module variable _allitems.
-		_todo:_load_items_new --file "$_flag_F" --prefix "$_flag_p"
-
-		if test -z "$_allitems"
-			echo "No tasks found in $filename"
-			return 0
-		end
+		_todo:_load_items --file "$_flag_F" --prefix "$_flag_p"; or return
 
 		# Add goal references to the goallist.
 		set -l goallist
@@ -409,12 +394,7 @@ function todo
 		or return
 
 		# Set the module variable _allitems.
-		_todo:_load_items_new --file "$_flag_F" --prefix "$_flag_p"
-
-		if test -z "$_allitems"
-			echo "No tasks found in $filename"
-			return 0
-		end
+		_todo:_load_items --file "$_flag_F" --prefix "$_flag_p"; or return
 
 		# Get prioritized goals
 		set -l goals
@@ -637,12 +617,7 @@ function todo
 		or return
 
 		# Set the module variable _allitems.
-		_todo:_load_items_new --file "$_flag_F" --prefix "$_flag_p"
-
-		if test -z "$_allitems"
-			echo "No tasks found in $filename"
-			return 0
-		end
+		_todo:_load_items --file "$_flag_F" --prefix "$_flag_p"; or return
 
 		# Set the tag exclusion list.
 		set -q _flag_x; and set -l exclude (string split ',' "$_flag_x")
@@ -700,7 +675,7 @@ function todo
 	# a line number or if (n-1) mod 4 = 1 it's a keyword (WORK, TODO, DONE,
 	# etc.), or if (n-1) mod 4 = 2 it's a a task description, or finally if
 	# (n-1) mod 4 = 3 it's a set of tags.
-	function _todo:_load_items_new
+	function _todo:_load_items
 		set -l opts 
 		set -a opts "F/file="
 		set -a opts "p/prefix="
@@ -726,6 +701,12 @@ function todo
 			s/^$prefix([[:alnum:]]+#{0,1}[[:alnum:]]*:{0,1}[[:alnum:]]*)[[:blank:]]+(.*)/\1"\\\n"\2"\\\n"/p
 			}"
 		set rawitems (sed -E -n -e "$sedcmd" $filename); or return
+
+		# Were there any tasks?
+		if test -z "$rawitems"
+			echo "No tasks found in $filename" >&2
+			return 2
+		end
 
 		for i in (seq 1 4 (count $rawitems))
 			set -l r $rawitems[$i..(math $i + 3)]
