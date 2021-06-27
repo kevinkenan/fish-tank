@@ -800,6 +800,8 @@ function todo
 			end
 		end
 
+		test -z "$taglist"; and return
+
 		# Print just the tags (m/minimal) or include the tag counts?
 		if set -q _flag_m
 			printf "%s\n" $taglist | sort -n | uniq 
