@@ -187,9 +187,10 @@ function exec_command_path
 		set _showhelp true
 	end
 
-	# Execute the command. Note that the arguments are stored in the exported
-	# variable $_args so no need to pass them explicitly.
-	$cmd; set s $status
+	# Execute the command. Note that the arguments are also stored in the
+	# exported variable $_args in case you need to see what was originally
+	# supplied for args.
+	$cmd $_args; set s $status
 	:_unload
 
 	# Exit with the status returned by $cmd.
