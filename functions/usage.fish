@@ -11,7 +11,6 @@
 # 		  -h, --help      Print this help.
 # 		  -n, --nothing   Does nothing.
 # 		  -t              Does even more of nothing.")
-#
 function usage
 	set -l opts 
 	set -a opts (fish_opt -r -s n -l name)
@@ -19,53 +18,47 @@ function usage
 	set -a opts (fish_opt -r -s g -l arg_list)
 	set -a opts (fish_opt -r -s r -l arg_help)
 	set -a opts (fish_opt -r -s o -l opt_help)
-	argparse -n "$_cmdpath" $opts -- $argv; or return
+	argparse -n "usage" $opts -- $argv; or return
 
 	# Prework to set the function name.
+	set -l callstack 
 	if set -q _flag_n
 		set callstack "" $_flag_n
 	else
-		set -l callstack 
 		for l in (status -t)
 			# Turn the stack into a simple list of function calls.
-			set -a callstack (string match -ar 'function \'(.*?)\'' $l)[2]
+			set -a callstack (string match -ar '^in function \'(.*?)\'' $l)[2]
 		end
 	end
 
 	set -l fncname $callstack[2]
-	set -l depends $_flag_depends
 	set -l helptxt $_flag_t
 	set -l arglist $_flag_g
 	set -l arghelp $_flag_r
 	set -l opthelp $_flag_o
 
+	# All of the help and usage text is stored in $usage.
 	set -l usage 
 
-	# Print the help info if supplied in helptxt. If help info was
-	# requested, then the command does not return an error.
-	set rcode 0
+	# Add the help info to usage if supplied in helptxt.
 	if test -n "$helptxt"
-		# set text (string split \n $helptxt)
-		# test -z (string trim $text[1]); and set text $text[2..]
-		# test -z (string trim $text[-1]); and set text $text[1..-2]
-		set -a usage (printf '%s\n' 'Help:')
 		set -a usage (printf "%s\n" (tabtrim -t $helptxt))
-		set -a usage (printf '%s\n' '--')
+		set -a usage (printf '%s\n' '')
 	end
 
-	# Print the main usage string
-	set -a usage "Usage: [options] $arglist"
+	# Add the main usage string.
+	set -a usage "Usage: $fncname [options] $arglist"
 
-	# Print arghelp if it exists
+	# Add arghelp if it exists
 	if test -n "$arghelp"
 		set -a usage "Arguments:"
-		set -a usage (printf "%s\n" (string trim -l -c \n $arghelp | string replace -r '^\t+' ''))
+		set -a usage (printf "%s\n" (tabtrim -t $arghelp))
 	end
 
-	# Print options help if it exists.
+	# Add options help if it exists.
 	if test -n "opthelp"
 		set -a usage "Options:"
-		set -a usage (printf "%s\n" (string trim -l -c \n $opthelp | string replace -r '^\t+' ''))
+		set -a usage (printf "%s\n" (tabtrim -t $opthelp))
 	end
 
 	printf "%s\n" $usage
