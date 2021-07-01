@@ -11,7 +11,7 @@ function compare
 	set usage '
 		Returns the result (zero is true) of comparing two files. Comparison
 		type is "newer" if the type is not set.
-		--
+		
 		Usage: check [options] [--type TYPE] BASE [TARGET]
 		Arguments:
 		  BASE     The main file.
@@ -37,7 +37,7 @@ function compare
 		  owner      Do BASE and TARGET have the same owner?
 		  same       Do BASE and TARGET have the same md5 hash?
 		  smaller    Is BASE smaller than TARGET
-		Return codes:
+		Return Codes:
 		   0   Comparison is true.
 		   1   Comparison is false.
 		   2   BASE not found.
