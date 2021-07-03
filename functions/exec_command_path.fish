@@ -32,6 +32,8 @@ function exec_command_path
 		set -a opts (fish_opt -r -s o -l opt_help)
 		set -a opts (fish_opt -s a -l action)
 		set -a opts (fish_opt -s x -l no_opts)
+		set -a opts "A/allow-args"
+		set -a opts "O/allow-opts"
 		argparse -n "$_cmdpath" $opts -- $argv; or return
 
 		# This is a special handler that mimics reflection. When a function is
@@ -57,10 +59,23 @@ function exec_command_path
 		set -l arghelp $_flag_r
 		set -l opthelp $_flag_o
 
-		# Check for 'extra' options when there should be none.
-		if set -q _flag_x; and test (count $_args) -gt 0
-			echo "$_cmdpath": Unknown option (string split ' ' -- $_args)[1]
-			return 1
+		# Return an error if the command does not support arguments and yet
+		# arguments were passed to the command.
+		if test -z "$arglist" -a -z "$arghelp"; and not set -q _flag_A
+			set -l a (string match -v -- "-*" $_args)
+			if test (count $a) -gt 0
+				echo "$_cmdpath": unknown argument \'(string split ' ' -- $a)[1]\'
+				return 1
+			end
+		end
+
+		# Return an error if the command does not parse nor support options
+		# and yet options were passed to the command.
+		if test -z "$opthelp"; and not set -q _flag_O
+			if test (count (string match -- "-*" $_args)) -gt 0
+				echo "$_cmdpath": unknown option \'(string split ' ' -- $_args)[1]\'
+				return 1
+			end
 		end
 
 		# If this is an "action" command and help is not requested, return and

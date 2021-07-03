@@ -20,8 +20,12 @@ function testcmd
 	end
 
 	function _testcmd:foo:bar 
+		argparse -n "$_cmdpath" "z/zip" -- $argv
+		or return
+
 		_cmd_register --action --no_opts \
-			--help_text "Test a subcommand with no defined parent command."
+			--help_text "Test a subcommand with no defined parent command." \
+			--opt_help " "
 		or return
 
 		echo "foo bar works, without parent command 'foo' being defined."
