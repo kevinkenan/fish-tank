@@ -20,12 +20,8 @@ function testcmd
 	end
 
 	function _testcmd:foo:bar 
-		argparse -n "$_cmdpath" "z/zip" -- $argv
-		or return
-
 		_cmd_register --action --no_opts \
-			--help_text "Test a subcommand with no defined parent command." \
-			--opt_help " "
+			--help_text "Test a subcommand with no defined parent command."
 		or return
 
 		echo "foo bar works, without parent command 'foo' being defined."
@@ -83,6 +79,27 @@ function testcmd
 	function _testcmd:what
 		_cmd_register --action; or return
 		echo A bare bones command.
+	end
+
+	function _testcmd:zip
+		_cmd_register --action \
+		  --help_text "An example of processing arguments." \
+		  --arg_list "[zap]"
+		or return
+
+		set -l msg Zip
+		for arg in $argv
+			switch $arg
+			case ''
+			case "zap"
+				set -a msg Zap
+			case '*'
+				echo "$_cmdpath": unknown argument: \'$arg\' >&2
+				return 1
+			end
+		end
+
+		echo $msg
 	end
 
 	exec_command_path \
