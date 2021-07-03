@@ -139,26 +139,38 @@ function exec_command_path
 	set -a opts (fish_opt -r -s r -l root_cmd --long-only)
 	argparse -n="exec_command_path" $opts -- $argv; or return
 
+	# Separate the command path from arguments and options.
 	set _cmdpath $_flag_root_cmd
-
-	# Separate the command path from arguments and options. Note that
-	# arguments are indicated by a '@' prefix.
 	if test (count $argv) -gt 0
-		for i in (seq 1 (count $argv))
-			if string match -q -- "--" $argv[$i]; and test (count $argv) -gt $i
-				set _args $argv[(math $i + 1)..]
+		set -l ctr 2
+		set -e _done
+		for c in $argv
+
+			# If c is an option, stop processing the command path.
+			if string match -q -- "-*" $c
 				break
-			else if string match -q -- "-*" $argv[$i]; or string match -q "@*" $argv[$i]
-				set _args $argv[$i..]
-				break
-			else
-				set -a _cmdpath $argv[$i]
 			end
+
+			# Build the command path.
+			set -a _cmdpath $c
+
+			# If partialcmd exists...
+			set -l partialcmd _(string join ':' $_cmdpath)
+			if functions -q $partialcmd
+				# Is partialcmd executable?
+				_check_exe=true $partialcmd
+				if test $status -eq 111
+					# It is executable; stop processing the command path.
+					set _args $argv[$ctr..]
+					break
+				end
+			end
+			# ...and is not exectuable; keep processing the command path.
+			set ctr (math $ctr + 1)
 		end
 	end
 
-	# Build cmd (the function name) from the command path and error if an
-	# unknown command is encountered.
+	# Check if the command is known or if it is an implicit part of command path.
 	set cmd _(string join ":" $_cmdpath)
 	set allfunc (functions -a)
 	if not contains "$cmd" $allfunc

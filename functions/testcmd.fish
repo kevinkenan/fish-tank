@@ -1,4 +1,15 @@
 function testcmd
+	set -l opts
+	set -a opts "X/xxx"
+	set -a opts "a/abc"
+	argparse --stop-nonopt $opts -- $argv
+	or return
+
+	# echo $_flag_X
+	if set -q _flag_a
+		echo got a at root
+	end
+
 	function _testcmd
 		_cmd_register --no_opts \
 			--help_text "A simple demonstration of exec_command_path." \
@@ -9,7 +20,7 @@ function testcmd
 	end
 
 	function _testcmd:foo:bar 
-		_cmd_register --action \
+		_cmd_register --action --no_opts \
 			--help_text "Test a subcommand with no defined parent command."
 		or return
 
@@ -17,9 +28,16 @@ function testcmd
 	end
 
 	function _testcmd:test
-		_cmd_register --no_opts \
+		set -l opts
+		set -a opts "a/abc"
+		argparse --stop-nonopt $opts -- $argv
+		or return
+
+		_cmd_register  \
 			--help_text "Everyone loves Nietzshce!"
 		or return
+
+		set -q _flag_a; and echo testcmd test got an a
 	end
 
 	function _testcmd:test:this
@@ -28,6 +46,8 @@ function testcmd
 		set -a opts (fish_opt -s a -r)
 		set -a opts (fish_opt -s n -l nothing)
 		argparse -n "$_cmdpath" $opts -- $_args; or return
+
+		set -q _flag_a; and echo $_cmdpath got an a
 
 		_cmd_register --action \
 			--help_text "
@@ -53,7 +73,7 @@ function testcmd
 			--help_text "Print a despairing message."
 		or return
 
-		echo When you stare into the abyss the abyss stares back at you.
+		echo When you stare long into the abyss the abyss stares into you.
 	end
 
 	function _testcmd:what
