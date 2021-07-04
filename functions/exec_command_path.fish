@@ -32,16 +32,20 @@ function exec_command_path
 		set -a opts (fish_opt -r -s o -l opt_help)
 		set -a opts (fish_opt -s a -l action)
 		set -a opts (fish_opt -s x -l no_opts)
+		set -a opts "e/exe"
 		set -a opts "A/allow-args"
 		set -a opts "O/allow-opts"
 		argparse -n "$_cmdpath" $opts -- $argv; or return
 
+		# a/action is deprecated, but for now it is a synonym for e/exe.
+		set -q _flag_a; and set _flag_e
+
 		# This is a special handler that mimics reflection. When a function is
 		# called and _check_exe is set to true, the function's execution is
-		# short circuted and returns 0 if the function is an "action" function
-		# or a 1 if it is an element of a command path.
+		# short circuted and returns 111 if the function is an executable
+		# function or a 112 if it is an element of a command path.
 		if $_check_exe
-			set -q _flag_a; and return 111
+			set -q _flag_e; and return 111
 			return 112
 		end
 
@@ -78,9 +82,9 @@ function exec_command_path
 			end
 		end
 
-		# If this is an "action" command and help is not requested, return and
-		# execute the action.
-		if set -q _flag_a; and not $_showhelp
+		# If this is an executable command and help is not requested, return and
+		# execute it.
+		if set -q _flag_e; and not $_showhelp
 			set -q _CMD_VERBOSE; and echo executing: $_cmdpath[1] (string split ':' $fncname)[2..]
 			return 0
 		end
@@ -96,8 +100,8 @@ function exec_command_path
 		end
 
 		# We only want {command} printed if there are subcommands, i.e. this
-		# isn't an action command.
-		if not set -q _flag_a
+		# isn't an executable command.
+		if not set -q _flag_e
 			set command {command}
 		end
 
@@ -124,7 +128,7 @@ function exec_command_path
 		end
 
 		# List the commands available from this path.
-		if not set -q _flag_a
+		if not set -q _flag_e
 			echo "Commands:"
 			for c in $subcmds
 				echo "  $c"

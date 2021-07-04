@@ -82,15 +82,14 @@ function testcmd
 	end
 
 	function _testcmd:zip
-		_cmd_register --action \
-		  --help_text "An example of processing arguments." \
-		  --arg_list "[zap]"
+		_cmd_register --exe -A \
+			--help_text "
+			An example of using -A to process arguments despite the lack of argument help text."
 		or return
 
 		set -l msg Zip
 		for arg in $argv
 			switch $arg
-			case ''
 			case "zap"
 				set -a msg Zap
 			case '*'
@@ -98,6 +97,55 @@ function testcmd
 				return 1
 			end
 		end
+
+		echo $msg
+	end
+
+	function _testcmd:dig
+		_cmd_register --exe -O \
+			--help_text "
+			An example of using -O to manually process options when there is option help text."
+		or return
+
+		set -l msg Dig
+		for arg in (string match -- "-*" $argv)
+			switch $arg
+			case '-∆' # option-j
+				set -a msg Deep
+			case -d --dug
+				set -a msg Dug
+			case '*'
+				echo "$_cmdpath": unknown option: \'$arg\' >&2
+				return 1
+			end
+		end
+
+		echo $msg
+	end
+
+	function _testcmd:tick
+		argparse -n "$_cmdpath" "b/boom" -- $argv
+		or return
+
+		_cmd_register --action \
+		  --help_text "An example of processing options and arguments." \
+		  --arg_list "[tock]" \
+		  --opt_help "
+		    -b, --boom   Boom!"
+		or return
+
+		set -l msg Tick
+		for arg in $argv
+			switch $arg
+			case "tock"
+				set -a msg Tock
+			case '*'
+				echo "$_cmdpath": unknown argument: \'$arg\' >&2
+				return 1
+			end
+		end
+
+		set -q _flag_b; and set -a msg "Boom!"
 
 		echo $msg
 	end
