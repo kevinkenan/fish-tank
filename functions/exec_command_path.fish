@@ -1,9 +1,15 @@
 
 function exec_command_path
+	set -gx _ecp_init
 	set -x _args
 	set -x _check_exe false
 	set -x _cmdpath
-	set -x _showhelp false
+	set -x _init_funcs
+	set -x _cmd_help_none 0 # Don't show any help text.
+	set -x _cmd_help_path 1 # Show just the path help.
+	set -x _cmd_help_full 2 # Show the full help.
+	set -x _showhelp $_cmd_help_none
+
 	# Return codes:
 	set -x _cmdpath_listing 2 # 
 	set -x _stop 120 # (deprecated) execution stopped safely
@@ -16,8 +22,9 @@ function exec_command_path
 	# _cmd_register return codes:
 	#    0  The command should continue executing.
 	#  110  Printed the help messge. Stop execution.
-	#  111  Executable check returned true. Stop execution.
-	#  112  Executable check returned false. Stop execution.
+	#  111  Executable check returned false. Stop execution.
+	#  112  Executable check returned true. Stop execution.
+	#  113  Executable check indicates initialization. Stop execution.
 	#  120  Printed command path listing. Stop execution.
 	function _cmd_register
 		# The return code defaults to indicate that the command printed the
@@ -32,9 +39,11 @@ function exec_command_path
 		set -a opts (fish_opt -r -s o -l opt_help)
 		set -a opts (fish_opt -s a -l action)
 		set -a opts (fish_opt -s x -l no_opts)
+		set -a opts "i/init"
 		set -a opts "e/exe"
-		set -a opts "A/allow-args"
-		set -a opts "O/allow-opts"
+		# set -a opts "R/args="
+		# set -a opts "A/allow-args"
+		# set -a opts "O/allow-opts"
 		argparse -n "$_cmdpath" $opts -- $argv; or return
 
 		# a/action is deprecated, but for now it is a synonym for e/exe.
@@ -42,11 +51,11 @@ function exec_command_path
 
 		# This is a special handler that mimics reflection. When a function is
 		# called and _check_exe is set to true, the function's execution is
-		# short circuted and returns 111 if the function is an executable
-		# function or a 112 if it is an element of a command path.
+		# short circuted and the return code indicates the type of function.
 		if $_check_exe
-			set -q _flag_e; and return 111
-			return 112
+			set -q _flag_e; and return 112
+			set -q _flag_i; and return 113
+			return 111
 		end
 
 		# Get a callstack list.
@@ -63,39 +72,54 @@ function exec_command_path
 		set -l arghelp $_flag_r
 		set -l opthelp $_flag_o
 
-		# Return an error if the command does not support arguments and yet
-		# arguments were passed to the command.
-		if test -z "$arglist" -a -z "$arghelp"; and not set -q _flag_A
-			set -l a (string match -v -- "-*" $_args)
-			if test (count $a) -gt 0
-				echo "$_cmdpath": unknown argument \'(string split ' ' -- $a)[1]\'
-				return 1
-			end
-		end
-
-		# Return an error if the command does not parse nor support options
-		# and yet options were passed to the command.
-		if test -z "$opthelp"; and not set -q _flag_O
-			if test (count (string match -- "-*" $_args)) -gt 0
-				echo "$_cmdpath": unknown option \'(string split ' ' -- $_args)[1]\'
-				return 1
-			end
-		end
-
-		# If this is an executable command and help is not requested, return and
-		# execute it.
-		if set -q _flag_e; and not $_showhelp
+		# If this command contains initialization code and help is not
+		# requested, return and execute it.
+		if set -q _flag_i; and test $_showhelp -eq $_cmd_help_none
 			set -q _CMD_VERBOSE; and echo executing: $_cmdpath[1] (string split ':' $fncname)[2..]
+			return 0
+		end
+
+		# # Experimental: Return an error if the command does not support
+		# # arguments and yet arguments were passed to the command.
+		# if set -q _flag_R; and test -z "$arglist" -a -z "$arghelp"; and not set -q _flag_A
+		# 	set -l a (string match -v -- "-*" $_flag_R)
+		# 	if test (count $a) -gt 0
+		# 		echo "$_cmdpath": Unknown argument \'(string split ' ' -- $a)[1]\'
+		# 		return 1
+		# 	end
+		# end
+
+		# # Experimental: Return an error if the command does not parse nor
+		# # support options and yet options were passed to the command.
+		# if set -q _flag_R; and test -z "$opthelp"; and not set -q _flag_O
+		# 	if test (count (string match -- "-*" $_flag_R)) -gt 0
+		# 		echo "$_cmdpath": Unknown option \'(string split ' ' -- $_args)[1]\'
+		# 		return 1
+		# 	end
+		# end
+
+		# If this is an executable command and help is not requested, execute
+		# any initialization functions and then return so that the command
+		# will execute. The results of initialization are stored in the global
+		# variable _ecp_init.
+		if set -q _flag_e; and test $_showhelp -eq $_cmd_help_none
+			for f in $_init_funcs
+				set -a _ecp_init ($f $_args); or return
+			end
 			return 0
 		end
 
 		# Print the help info if supplied in helptxt. If help info was
 		# requested, then the command does not return an error.
-		if $_showhelp
+		if test $_showhelp -eq $_cmd_help_full
 			set rcode 110
 			if test -n "$helptxt"
-				tabtrim -t $helptxt
-				printf '%s\n' '--'
+				echo ""
+				# echo -n "  "
+				for l in (string split \n (tabtrim -t $helptxt))
+					printf "  %s\n" $l
+				end
+				echo ""
 			end
 		end
 
@@ -107,10 +131,6 @@ function exec_command_path
 
 		# Print the main usage string
 		echo "Usage:" $_cmdpath $command [options] $arglist
-		
-		# Create the list of subcmds by inspecting function names that begin
-		# with the calling function's name and don't begin with '_'.
-		# set fn (functions -a | grep "$fncname:[^_][^:]*\$")
 
 		# Get all the commands that could be called next.
 		set -l cmdp _(string join ':' $_cmdpath)
@@ -121,7 +141,7 @@ function exec_command_path
 			set exe ""
 			if functions -q $f
 				_check_exe=true $f
-				test $status -eq 111; and set exe '*'
+				test $status -eq 112; and set exe '*'
 			end
 			set -l newcmd (string split : $f)[-1]"$exe"
 			contains $newcmd $subcmds; or set -a subcmds $newcmd
@@ -155,11 +175,13 @@ function exec_command_path
 
 ###############################################################################
 
-	set -a opts (fish_opt -r -s r -l root_cmd --long-only)
+	set -a opts "r-root_cmd="
 	argparse -n="exec_command_path" $opts -- $argv; or return
 
-	# Separate the command path from arguments and options.
+	# Separate the command path from arguments and options and note any
+	# initialization functions.
 	set _cmdpath $_flag_root_cmd
+	set _showhelp $_cmd_help_path
 	if test (count $argv) -gt 0
 		set -l ctr 2
 		set -e _done
@@ -167,23 +189,36 @@ function exec_command_path
 
 			# If c is an option, stop processing the command path.
 			if string match -q -- "-*" $c
+				set _args $c $argv[$ctr..]
 				break
 			end
 
 			# Build the command path.
 			set -a _cmdpath $c
 
-			# If partialcmd exists...
+			# Stop processing the command path when we reach the executable
+			# command.
 			set -l partialcmd _(string join ':' $_cmdpath)
 			if functions -q $partialcmd
 				# Is partialcmd executable?
 				_check_exe=true $partialcmd
-				if test $status -eq 111
-					# It is executable; stop processing the command path.
+				switch $status
+				case 112
+					# The command is executable so populate the args.
 					set _args $argv[$ctr..]
+					# Executable functions show the full help if requested.
+					set _showhelp $_cmd_help_none
 					break
+				case 113
+					# It is a command path function with initiatization code.
+					set -a _init_funcs $partialcmd
+				case 111
+					# The command is not executable.
+				case '*'
+					return
 				end
 			end
+
 			# ...and is not exectuable; keep processing the command path.
 			set ctr (math $ctr + 1)
 		end
@@ -213,14 +248,12 @@ function exec_command_path
 	set -l t2 (contains -i -- '--help' $_args)
 	if test $status -eq 0; set -e _args[$t2]; end
 
-	# Set the exported _showhelp to true if -h/--help was set.
+	# Set _showhelp if -h/--help was set.
 	if test -n "$t1" -o -n "$t2"
-		set _showhelp true
+		set _showhelp $_cmd_help_full
 	end
 
-	# Execute the command. Note that the arguments are also stored in the
-	# exported variable $_args in case you need to see what was originally
-	# supplied for args.
+	# Execute the command.
 	$cmd $_args; set s $status
 	:_unload
 
