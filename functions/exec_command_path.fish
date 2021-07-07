@@ -184,7 +184,6 @@ function exec_command_path
 	set _showhelp $_cmd_help_path
 	if test (count $argv) -gt 0
 		set -l ctr 2
-		set -e _done
 		for c in $argv
 
 			# If c is an option, stop processing the command path.
