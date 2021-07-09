@@ -173,10 +173,35 @@ function exec_command_path
 		return $rcode
 	end
 
+	function _cmd_get_commands
+		set -l parentcmd $argv[1]
+		set -l indent $argv[2]
+
+		
+		set -l cmd_name (string split -r --max 1 ':' -f 2 $parentcmd)
+		or set cmd_name (string trim -c '_' $parentcmd)
+
+		# Print the command.
+		set -l spaces (string repeat -n $indent ' ')
+		echo -s $spaces $cmd_name
+
+		# Handle child commands
+		set -l childcmds (functions -a | string match -r "^$parentcmd"'[:\$]{1}[^_]\w+' | sort | uniq)
+		for c in $childcmds
+			_cmd_get_commands $c (math $indent + 2)
+		end		
+	end
+
 ###############################################################################
 
 	set -a opts "r-root_cmd="
 	argparse -n="exec_command_path" $opts -- $argv; or return
+
+	# If argv only consists of +, then print the command tree and exit.
+	if test (count $argv) -eq 1 -a "$argv[1]" = "+"
+		_cmd_get_commands _$_flag_root_cmd 0
+		return
+	end
 
 	# Separate the command path from arguments and options and note any
 	# initialization functions.
