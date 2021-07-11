@@ -104,25 +104,11 @@ function testcmd
 
 
 	# function _testcmd:dig
-	# 	_cmd_register --exe -O \
-	# 		--help_text "
-	# 		An example of using -O to manually process options when there is option help text."
+	# 	_cmd_register --exe \
+	# 		--help_text "Testing variables"
 	# 	or return
 
-	# 	set -l msg Dig
-	# 	for arg in (string match -- "-*" $argv)
-	# 		switch $arg
-	# 		case '-∆' # option-j
-	# 			set -a msg Deep
-	# 		case -d --dug
-	# 			set -a msg Dug
-	# 		case '*'
-	# 			echo "$_cmdpath": unknown option: \'$arg\' >&2
-	# 			return 1
-	# 		end
-	# 	end
-
-	# 	echo $msg
+	# 	echo $help_text
 	# end
 
 

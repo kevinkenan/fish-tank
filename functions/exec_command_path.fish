@@ -1,18 +1,18 @@
 
 function exec_command_path
 	set -gx _ecp_init
-	set -x _args
-	set -x _check_exe false
-	set -x _cmdpath
-	set -x _init_funcs
-	set -x _cmd_help_none 0 # Don't show any help text.
-	set -x _cmd_help_path 1 # Show just the path help.
-	set -x _cmd_help_full 2 # Show the full help.
-	set -x _showhelp $_cmd_help_none
+	set -lx _args
+	set -lx _check_exe false
+	set -lx _cmdpath
+	set -lx _init_funcs
+	set -lx _cmd_help_none 0 # Don't show any help text.
+	set -lx _cmd_help_path 1 # Show just the path help.
+	set -lx _cmd_help_full 2 # Show the full help.
+	set -lx _showhelp $_cmd_help_none
 
 	# Return codes:
-	set -x _cmdpath_listing 2 # 
-	set -x _stop 120 # (deprecated) execution stopped safely
+	set -lx _cmdpath_listing 2 # 
+	set -lx _stop 120 # (deprecated) execution stopped safely
 
 	function :_unload
 		functions -e (functions -a | grep "_$_cmdpath[1]:")
@@ -29,7 +29,7 @@ function exec_command_path
 	function _cmd_register
 		# The return code defaults to indicate that the command printed the
 		# command path listing and was not an executable command.
-		set rcode 120
+		set -l rcode 120
 
 		set -l opts 
 		set -a opts "d/depends=+"
