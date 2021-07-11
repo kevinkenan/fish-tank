@@ -5,12 +5,6 @@ function testcmd
 	argparse --stop-nonopt $opts -- $argv
 	or return
 
-	# echo $_flag_X
-	if set -q _flag_a
-		echo got a at root
-	end
-
-
 	# This is the root command.
 	function _testcmd
 		_cmd_register --no_opts \
@@ -33,6 +27,8 @@ function testcmd
 	end
 
 
+	# This is a non-executable command that is the parent for other commands.
+	# It has it's own help message.
 	function _testcmd:test
 		_cmd_register \
 			--help_text "Everyone loves Nietzshce!"
@@ -40,6 +36,7 @@ function testcmd
 	end
 
 
+	# This shows how options and _cmd_register are used.
 	function _testcmd:test:this
 		set -l opts
 		set -a opts "A-arg1="
@@ -68,6 +65,8 @@ function testcmd
 	end
 
 
+	# Just a simple command that shows how a parent command, 'test' in this case,
+	# can have muliple child commands: 'this' and 'that'.
 	function _testcmd:test:that
 		_cmd_register --exe --help_text "Print a despairing message." 
 		or return
@@ -76,6 +75,8 @@ function testcmd
 	end
 
 
+	# The simplest executable command. Quick and easy to implement, but it
+	# provides the user with no help.
 	function _testcmd:what
 		_cmd_register --exe; or return
 		echo A bare bones command.
@@ -102,16 +103,7 @@ function testcmd
 	# 	echo $msg
 	# end
 
-
-	# function _testcmd:dig
-	# 	_cmd_register --exe \
-	# 		--help_text "Testing variables"
-	# 	or return
-
-	# 	echo $help_text
-	# end
-
-
+	# A simple example of using options and arguments.
 	function _testcmd:tick
 		argparse -n "$_cmdpath" --max-args 1 "b/boom" -- $argv
 		or return
@@ -140,6 +132,10 @@ function testcmd
 	end
 
 
+	# The next several functions define the 'go' commands, which demonstrate
+	# how non-executable parent commands can contain initialization code.
+	# This functionality is still somewhat experimental.
+
 	set -x go_opts
 	set -a go_opts "R/ready"
 	set -x go_opts_help \
@@ -147,7 +143,7 @@ function testcmd
 		  -R, --ready   Ready to go."
 
 	function _testcmd:go
-		argparse -n "$_cmdpath" --ignore-unknown $go_opts -- $_args
+		argparse -n "$_cmdpath" --ignore-unknown $go_opts -- $argv
 		or return
 
 		_cmd_register --init --help_text "Going somewhere."
@@ -180,9 +176,7 @@ function testcmd
 		argparse -n "$_cmdpath" --ignore-unknown $opts -- $argv
 		or return
 
-		_cmd_register --init \
-			--help_text "Move commands." 
-			# --opt_help $move_opts_help
+		_cmd_register --init --help_text "Move commands." 
 		or return
 
 		set -l dir
