@@ -230,7 +230,7 @@ function exec_command_path
 	set _showhelp $_cmd_help_path
 
 	# If argv only consists of +, then print the command tree and exit.
-	if test (count $argv) -eq 1 -a "$argv[1]" = "+"
+	if test (count $argv) -eq 1; and contains -- "$argv[1]" '+'
 		_cmd_get_commands _$_flag_root_cmd
 		:_unload
 		return
