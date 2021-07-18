@@ -183,10 +183,22 @@ function exec_command_path
 		set -l childcmds (functions -a | string match -r "^$parentcmd"'[:\$]{1}[^_]\w+' | sort | uniq)
 		set -a cmdcounts (count $childcmds)
 
-		# Print the root command
+		# Print the root command and any specified subcommands.
 		if test (count $cmdcounts) -eq 1
-			echo (string trim -c '_' $parentcmd)
+			set -l cmds (string split ':' $parentcmd)
+			echo (string trim -c '_' $cmds[1])
+			set -l nchildcmds (count $cmds[2..])
+			if test $nchildcmds -gt 0
+				set cmdcounts
+				for i in (seq $nchildcmds)
+					echo -n (string repeat -n (math $i - 1) '   ')
+					echo '└─' $cmds[(math $i + 1)]
+					set -a cmdcounts 0
+				end
+				set -a cmdcounts (count $childcmds)
+			end
 		end
+		
 
 		# Handle child commands
 		for c in $childcmds
@@ -226,12 +238,20 @@ function exec_command_path
 	set -a opts "r-root_cmd="
 	argparse -n="exec_command_path" $opts -- $argv; or return
 
-	set _cmdpath $_flag_root_cmd
+	if set -q _flag_root_cmd
+		set _cmdpath $_flag_root_cmd
+	else
+		for l in (status -t)
+			# Extract the root command name from the function stack.
+			set _cmdpath (string match -ar 'function \'(.*?)\'' (status -t)[-1])[2]
+		end
+	end
+
 	set _showhelp $_cmd_help_path
 
-	# If argv only consists of +, then print the command tree and exit.
-	if test (count $argv) -eq 1; and contains -- "$argv[1]" '+'
-		_cmd_get_commands _$_flag_root_cmd
+	# If argv begins with +, then print the command tree and exit.
+	if contains -- "$argv[1]" "+"
+		_cmd_get_commands (string join ':' _$_cmdpath $argv[2..])
 		:_unload
 		return
 	end
@@ -240,6 +260,7 @@ function exec_command_path
 	# initialization functions.
 	if test (count $argv) -gt 0
 		set -l ctr 2
+
 		for c in $argv
 
 			# If c is an option, stop processing the command path.
@@ -299,9 +320,9 @@ function exec_command_path
 	# Check to see if -h/--help was set and if so remove it from the _args
 	# list.
 	set -l t1 (contains -i -- '-h' $_args)
-	if test $status -eq 0; set -e _args[$t1]; end
+	test $status -eq 0; and set -e _args[$t1]
 	set -l t2 (contains -i -- '--help' $_args)
-	if test $status -eq 0; set -e _args[$t2]; end
+	test $status -eq 0; and set -e _args[$t2]
 
 	# Set _showhelp if -h/--help was set.
 	if test -n "$t1" -o -n "$t2"
