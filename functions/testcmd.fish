@@ -1,9 +1,4 @@
 function testcmd
-	set -l opts
-	set -a opts "X/xxx"
-	set -a opts "a/abc"
-	argparse --stop-nonopt $opts -- $argv
-	or return
 
 	# This is the root command.
 	function _testcmd
@@ -19,11 +14,11 @@ function testcmd
 	# Demonstrates that you do not need to explicitly define parent commands.
 	# In this case there is no 'foo' command defined.
 	function _testcmd:foo:bar 
-		_cmd_register --exe --no_opts \
-			--help_text "Test a subcommand with no defined parent command."
+		_cmd_register --exe \
+			--help_text "Test a subcommand without an explicit definition."
 		or return
 
-		echo "foo bar works, without parent command 'foo' being defined."
+		echo "'testcmd foo bar' works without the subcommand 'foo' being defined."
 	end
 
 
@@ -55,10 +50,9 @@ function testcmd
 			  ARG1   This is the first argument that is ignored.
 			  ARG2   The second argument is just as ignored as the first." \
 			--opt_help "
-			  -a VALUE        Does absolutely nothing of VALUE.
-			  -h, --help      Print this help.
-			  -n, --nothing   Does nothing.
-			  -t              Does even more of nothing." 
+			  -a, --abc VALUE   Does absolutely nothing of VALUE.
+			  -h, --help        Print this help.
+			  -n, --nothing     Does nothing."
 		or return
 
 		echo That which does not kill us makes us stronger.
@@ -82,26 +76,6 @@ function testcmd
 		echo A bare bones command.
 	end
 
-
-	# function _testcmd:zippity
-	# 	_cmd_register --exe -A \
-	# 		--help_text "
-	# 		An example of using -A to process arguments despite the lack of argument help text."
-	# 	or return
-
-	# 	set -l msg Zippity
-	# 	for arg in $argv
-	# 		switch $arg
-	# 		case z zap zappity
-	# 			set -a msg Zappity
-	# 		case '*'
-	# 			echo "$_cmdpath": unknown argument: \'$arg\' >&2
-	# 			return 1
-	# 		end
-	# 	end
-
-	# 	echo $msg
-	# end
 
 	# A simple example of using options and arguments.
 	function _testcmd:tick
@@ -152,7 +126,7 @@ function testcmd
 		set -l readiness "no"
 		set -q _flag_R; and set readiness "yes"
 
-		echo "ready:$readiness"
+		echo "go:$readiness"
 	end
 
 
@@ -172,7 +146,6 @@ function testcmd
 
 	function _testcmd:go:move
 		set -l opts $move_opts
-		set -a opts $go_opts
 		argparse -n "$_cmdpath" --ignore-unknown $opts -- $argv
 		or return
 
@@ -186,21 +159,24 @@ function testcmd
 		set -q _flag_r; and set dir right
 		set -q _flag_o; and set dir "$_flag_o"
 
-		echo -- "dir:$dir"
+		echo "move:$dir"
+
+		echo "ERROR" >&2
+		return 1
 	end
 
 
 	function _testcmd:go:move:fast
 		set -l opts
-		set -a opts "w/where="
 		set -a opts "f/faster"
 		set -a opts $go_opts
 		set -a opts $move_opts
-		argparse -n "$_cmdpath" --max-args 0 $opts -- $argv
+		argparse -n "$_cmdpath" $opts -- $argv
 		or return
 
 		_cmd_register --exe \
 			--help_text "Fast mover." \
+			--arg_list "[go options] [move options]" \
 			--opt_help "
 			  -f, --faster   Move even faster.
 			$move_opts_help
@@ -212,14 +188,12 @@ function testcmd
 		for c in $_ecp_init
 			set -l kv (string split ':' -m 1 $c)
 			switch $kv[1]
-			case dir
+			case move
 				set dir $kv[2]
-			case ready
+			case go
 				set ready $kv[2]
 			end
 		end
-
-		set -q _flag_w; and set dir "$_flag_w"
 
 		if test "$ready" != "yes"
 			echo "Not ready"
@@ -232,9 +206,47 @@ function testcmd
 	end
 
 
+	function _testcmd:go:move:slow
+		set -l opts
+		set -a opts "s/slower"
+		set -a opts $go_opts
+		set -a opts $move_opts
+		argparse -n "$_cmdpath" --max-args 0 $opts -- $argv
+		or return
+
+		_cmd_register --exe \
+			--help_text "Slow mover." \
+			--arg_list "[go options] [move options]" \
+			--opt_help "
+			  -s, --slower   Move even slower.
+			$move_opts_help
+			$go_opts_help"
+		or return
+
+		set -l dir
+		set -l ready
+		for c in $_ecp_init
+			set -l kv (string split ':' -m 1 $c)
+			switch $kv[1]
+			case move
+				set dir $kv[2]
+			case go
+				set ready $kv[2]
+			end
+		end
+
+		if test "$ready" != "yes"
+			echo "Not ready"
+			return 1
+		end
+
+		set -l speed (set -q _flag_s; and echo slower; or echo slow)
+
+		echo Moving (select "$dir" "nowhere") $speed.
+	end
+
+
 ##########################################################################
 
-	exec_command_path \
-		--root_cmd "testcmd" \
-		-- $argv
+	exec_command_path -- $argv
 end
