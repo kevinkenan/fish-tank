@@ -11,7 +11,7 @@ function todo
 
 
 	function _todo
-		_cmd_register --no_opts \
+		_cmd_register \
 			--help_text "Manage tasks embedded in a file."
 		or return
 	end
@@ -768,7 +768,5 @@ function todo
 	end
 
 
-	exec_command_path \
-		--root_cmd "todo" \
-		-- $argv
+	exec_command_path -- $argv
 end
