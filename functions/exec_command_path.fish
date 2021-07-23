@@ -17,6 +17,7 @@ function exec_command_path
 	function :_unload
 		functions -e (functions -a | grep "_$_cmdpath[1]:")
 		functions -e ":_unload"
+		set -e _ecp_init
 	end
 
 	# _cmd_register return codes:
