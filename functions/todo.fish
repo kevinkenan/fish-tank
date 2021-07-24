@@ -30,7 +30,7 @@ function todo
 		argparse -n "$_cmdpath" -x D,T $opts -- $_args
 		or return
 
-		_cmd_register --action \
+		_cmd_register --exe \
 			--help_text "Show a basic list of all DONE tasks sorted by completion date." \
 			--opt_help "
 			  -c, --canceled     Include XXXX tasks.
@@ -80,7 +80,7 @@ function todo
 		argparse -n "$_cmdpath" -x D,T $opts -- $_args
 		or return
 
-		_cmd_register --action \
+		_cmd_register --exe \
 			--help_text "Show completed tasks grouped by goal." \
 			--opt_help "
 			  -a, --all          Show all completed tasks, even those without a goal.
@@ -202,7 +202,7 @@ function todo
 		argparse -n "$_cmdpath" $opts -- $_args
 		or return
 
-		_cmd_register --action \
+		_cmd_register --exe \
 			--help_text "List tasks. By default only WORK and NEXT tasks are shown." \
 			--opt_help "
 			  -a, --all          List all tasks.
@@ -236,18 +236,18 @@ function todo
 			set -l keys (string split '' $_flag_t)
 			for k in $keys
 				switch (echo $k)
-				case w
-					test -n "$_work"; and set -a lists _work
+				case c
+					test -n "$_comp"; and set -a lists _comp
+				case d
+					test -n "$_done"; and set -a lists _done
+				case g
+					test -n "$_goal"; and set -a lists _goal
 				case n 
 					test -n "$_next"; and set -a lists _next
 				case t
 					test -n "$_todo"; and set -a lists _todo
-				case g
-					test -n "$_goal"; and set -a lists _goal
-				case d
-					test -n "$_done"; and set -a lists _done
-				case c
-					test -n "$_comp"; and set -a lists _comp
+				case w
+					test -n "$_work"; and set -a lists _work
 				case x
 					test -n "$_xxxx"; and set -a lists _xxxx
 				case '*'
@@ -307,7 +307,7 @@ function todo
 		argparse -n "$_cmdpath" $opts -- $_args
 		or return
 
-		_cmd_register --action \
+		_cmd_register --exe \
 			--help_text "List tasks that reference non-existing goals." \
 			--opt_help "
 			  -F, --file FILE    Look in FILE for tasks instead of WORK.txt.
@@ -366,36 +366,28 @@ function todo
 
 	function _todo:plan
 		set -l opts 
-		set -a opts "a/all"
-		set -a opts "d/done"
+		set -a opts "a/attached"
 		set -a opts "D/date-table"
 		set -a opts "F/file="
 		set -a opts "f/filter="
 		set -a opts "g/goal="
 		set -a opts "l#limit"
-		set -a opts "n/no-next"
 		set -a opts "p/prefix="
-		set -a opts "t/no-todo"
 		set -a opts "T/table"
-		set -a opts "w/no-work"
 		argparse -n "$_cmdpath" $opts -- $_args
 		or return
 
-		_cmd_register --action \
+		_cmd_register --exe \
 			--help_text "Plan tasks." \
 			--opt_help "
 			  -a, --attached     Only print tasks attached to a goal.
-			  -d, --done         Include completed tasks.
 			  -D, --date-table   Print tasks in a table with the due date.
 			  -F, --file FILE    Look in FILE for todos instead of WORK.txt.
 			  -f, --filter TAG   Only show tasks with the tag TAG.
 			  -g, --goal GOAL    Only print tasks tagged with goal GOAL.
 			  -l, --limit NUM    Don't print more then NUM TODO tasks
-			  -n, --no-next      Don't include NEXT tasks.
 			  -p, --prefix PRE   Keywords will have PRE prepended.
-			  -t, --no-todo      Don't include TODO tasks.
 			  -T, --table        Print tasks in a table with tags.
-			  -w, --no-work      Don't include WORK tasks.
 			  "
 		or return
 
@@ -407,6 +399,7 @@ function todo
 		# Get prioritized goals
 		set -l goals (_todo:_tag_sorter -r --date '@' $_goal)
 
+		# For each goal, gather completed tasks items.
 		set -l items
 		for g in $goals
 			set -l goal (string split '\r' $g)
@@ -416,6 +409,9 @@ function todo
 			if set -q _flag_g
 				contains "$alias" $_flag_g; or continue
 			end
+
+			# Populate items with the goal.
+			set -a items (string join '\r' $goal)
 
 			# Gather all of the completed tasks for the current goal.
 			set -l itemlist
@@ -445,16 +441,18 @@ function todo
 				set -a itemlist (_todo:_tag_sorter -r --date '@' $goalitems)
 			end	
 
-			# If $itemlist is empty (i.e. there are no completed tasks), skip
-			# this goal unless the goal itself is completed (COMP).
-			set -l key (string split ':' $goal[2])[1]
-			test -z "$itemlist" -a "$key" != "COMP"; and continue
+			# # If $itemlist is empty (i.e. there are no completed tasks), skip
+			# # this goal unless the goal itself is completed (COMP).
+			# set -l key (string split ':' $goal[2])[1]
+			# test -z "$itemlist" -a "$key" != "COMP"; and continue
 
-			# Populate the $items with the goal and the item list.
-			set -a items (string join '\r' $goal)
+			# Populate the $items with the item list.
 			set -a items $itemlist[1..(select "$_flag_l" -1)]
+
+			# Add a blank line between goals.
 			set -a items (string join '\r' " " " " " " " ")
 		end
+
 		# All tasks associated with goals have been placed into $items and
 		# sorted.
 
@@ -468,8 +466,9 @@ function todo
 
 		_todo:_print_items $dateflag $_flag_T -d $digits $items
 
-		# Return if asked to only print tasks attached to goals...
-		set -q _flag_a; and return
+		# Return if asked to only print tasks attached to goals or to print
+		# tasks associated with a particular goal.
+		set -q _flag_a; or set -q _flag_g; and return
 
 		# ...Otherwise print tasks without attached goals.
 		set -l itemlist
@@ -484,8 +483,8 @@ function todo
 			set -a itemlist (_todo:_tag_sorter -r --date '@' $unsorted); or return
 		end
 
-		# Add the item list to the master list of items, honoring the
-		# todo limit if set.
+		# Add the item list of unattached goals to the master list of items,
+		# honoring the todo limit if set.
 		set -l items $itemlist[1..(select "$_flag_l" -1)]
 
 		if test -n "$items"
@@ -505,7 +504,7 @@ function todo
 		argparse -n "$_cmdpath" $opts -- $_args
 		or return
 
-		_cmd_register --action \
+		_cmd_register --exe \
 			--help_text "List the task tags and their counts." \
 			--opt_help "
 			  -m, --minimal          List only the tags.
